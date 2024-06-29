@@ -1,10 +1,13 @@
 package com.Tahiliani.controller;
 
 import com.Tahiliani.config.JwtProvider;
+import com.Tahiliani.model.TwoFactorOTP;
 import com.Tahiliani.model.User;
 import com.Tahiliani.repository.UserRepository;
 import com.Tahiliani.response.AuthResponse;
 import com.Tahiliani.service.CustomUserDetailsService;
+import com.Tahiliani.service.TwoFactorOtpService;
+import com.Tahiliani.utils.OtpUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +30,8 @@ public class AuthController {
     private UserRepository userRepository;
     @Autowired
     private CustomUserDetailsService customUserDetailsService;
+    @Autowired
+    private TwoFactorOtpService twoFactorOtpService;
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> register(@RequestBody User user) throws Exception {
 
@@ -61,6 +66,21 @@ public class AuthController {
 
         SecurityContextHolder.getContext().setAuthentication(auth);
         String jwt= JwtProvider.generateToken(auth);
+        User authUser =userRepository.findByEmail(userName);
+        if (user.getTwoFactorAuth().isEnabled()){
+            AuthResponse res =new AuthResponse();
+            res.setMessage("Two Factor Auth is Enable");
+            res.setTwoFactorAuthEnable(true);
+            String otp= OtpUtils.generateOtp();
+            TwoFactorOTP oldTwoFactorOTP=twoFactorOtpService.findByUser(authUser.getId());
+            if(oldTwoFactorOTP!=null){
+                twoFactorOtpService.deleteTwoFactorOtp(oldTwoFactorOTP);
+            }
+            TwoFactorOTP newTwoFactorOTP=twoFactorOtpService.createTwoFactorOtp(authUser,otp,jwt);
+            res.setSession(newTwoFactorOTP.getId());
+            return new ResponseEntity<>(res,HttpStatus.ACCEPTED);
+        }
+
         AuthResponse res=new AuthResponse();
         res.setJwt(jwt);
         res.setStatus(true);
