@@ -6,6 +6,7 @@ import com.Tahiliani.model.User;
 import com.Tahiliani.repository.UserRepository;
 import com.Tahiliani.response.AuthResponse;
 import com.Tahiliani.service.CustomUserDetailsService;
+import com.Tahiliani.service.EmailService;
 import com.Tahiliani.service.TwoFactorOtpService;
 import com.Tahiliani.utils.OtpUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,10 +17,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.security.Security;
 
@@ -32,6 +30,8 @@ public class AuthController {
     private CustomUserDetailsService customUserDetailsService;
     @Autowired
     private TwoFactorOtpService twoFactorOtpService;
+    @Autowired
+    private EmailService emailService;
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> register(@RequestBody User user) throws Exception {
 
@@ -77,6 +77,7 @@ public class AuthController {
                 twoFactorOtpService.deleteTwoFactorOtp(oldTwoFactorOTP);
             }
             TwoFactorOTP newTwoFactorOTP=twoFactorOtpService.createTwoFactorOtp(authUser,otp,jwt);
+            emailService.sendVerificationOtpEmail(userName,otp);
             res.setSession(newTwoFactorOTP.getId());
             return new ResponseEntity<>(res,HttpStatus.ACCEPTED);
         }
@@ -98,6 +99,21 @@ public class AuthController {
             throw new BadCredentialsException("invalid Password");
         }
         return new UsernamePasswordAuthenticationToken(userDetails,password,userDetails.getAuthorities());
+
+    }
+
+    @PostMapping("/two-factor/otp/{otp}")
+    public ResponseEntity<AuthResponse> verifySiginOtp(@PathVariable String otp,@RequestParam String id) throws Exception {
+        TwoFactorOTP twoFactorOTP=twoFactorOtpService.findBYId(id);
+        if (twoFactorOtpService.verifyTwoFactorOtp(twoFactorOTP,otp)){
+            AuthResponse res=new AuthResponse();
+            res.setMessage("Two factor authenticcation verified");
+            res.setTwoFactorAuthEnable(true);
+            res.setJwt(twoFactorOTP.getJwt());
+            return new ResponseEntity<>(res,HttpStatus.OK);
+
+        }
+        throw new Exception("invalid otp");
 
     }
 
